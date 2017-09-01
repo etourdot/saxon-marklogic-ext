@@ -66,14 +66,14 @@ import net.sf.saxon.value.StringValue;
  * <tt>declare namespace els-ext = 'fr:askjadev:xml:extfunctions';
  * mkl-ext:marklogic-query("for $i in 1 to 10 return
  * &lt;test&gt;{$i}&lt;/test&gt;", &lt;marklogic&gt;
- * &lt;server&gt;localhost&lt;/server&gt; &lt;port&gt;1984&lt;/port&gt;
+ * &lt;server&gt;localhost&lt;/server&gt; &lt;port&gt;8999&lt;/port&gt;
  * &lt;user&gt;user&lt;/user&gt; &lt;password&gt;password&lt;/password&gt;
  * &lt;/marklogic&gt; );</tt>
  * Or :
  * <tt>declare namespace els-ext = 'fr:askjadev:xml:extfunctions';
  * mkl-ext:marklogic-query("for $i in 1 to 10 return
  * &lt;test&gt;{$i}&lt;/test&gt;",
- * "localhost", "1984", "user", "password");</tt>
+ * "localhost", "8999", "user", "password");</tt>
  *
  * Many thanks to Christophe Marchand for the base code!
  * 
