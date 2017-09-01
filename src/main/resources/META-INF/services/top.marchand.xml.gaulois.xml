@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<gaulois-services>
+  <saxon>
+    <extensions>
+      <function>fr.askjadev.xml.extfunctions.marklogic.MarkLogicQuery</function>
+    </extensions>
+  </saxon>
+</gaulois-services>
