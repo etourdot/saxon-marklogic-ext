@@ -65,18 +65,19 @@ import net.sf.saxon.value.StringValue;
  * Use as :
  * <tt>declare namespace els-ext = 'fr:askjadev:xml:extfunctions';
  * mkl-ext:marklogic-query("for $i in 1 to 10 return
- * &lt;test&gt;{$i}&lt;/test&gt;", &lt;marklogic&gt;
- * &lt;server&gt;localhost&lt;/server&gt; &lt;port&gt;8999&lt;/port&gt;
- * &lt;user&gt;user&lt;/user&gt; &lt;password&gt;password&lt;/password&gt;
- * &lt;/marklogic&gt; );</tt>
+ * &lt;test&gt;{$i}&lt;/test&gt;",&lt;marklogic&gt;
+ * &lt;server&gt;localhost&lt;/server&gt;&lt;port&gt;8999&lt;/port&gt;
+ * &lt;user&gt;user&lt;/user&gt;&lt;password&gt;password&lt;/password&gt;
+ * &lt;database&gt;optional-database-name&lt;/database&gt; &lt;/marklogic&gt;
+ * );</tt>
  * Or :
  * <tt>declare namespace els-ext = 'fr:askjadev:xml:extfunctions';
  * mkl-ext:marklogic-query("for $i in 1 to 10 return
- * &lt;test&gt;{$i}&lt;/test&gt;",
- * "localhost", "8999", "user", "password");</tt>
+ * &lt;test&gt;{$i}&lt;/test&gt;", "localhost", "8999", "user", "password",
+ * "optional-database-name");</tt>
  *
  * Many thanks to Christophe Marchand for the base code!
- * 
+ *
  * @author Axel Court
  */
 public class MarkLogicQuery extends ExtensionFunctionDefinition {
@@ -97,6 +98,7 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
             SequenceType.SINGLE_ITEM,
             SequenceType.OPTIONAL_STRING,
             SequenceType.OPTIONAL_STRING,
+            SequenceType.OPTIONAL_STRING,
             SequenceType.OPTIONAL_STRING};
     }
 
@@ -107,7 +109,7 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
 
     @Override
     public int getMaximumNumberOfArguments() {
-        return 5;
+        return 6;
     }
 
     @Override
@@ -120,15 +122,25 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
         return new ExtensionFunctionCall() {
             @Override
             public Sequence call(XPathContext xpc, Sequence[] sqncs) throws XPathException {
+                String xquery = null, server = null, user = null, password = null, database = null;
+                Integer port = null;
                 String[] args = checkArgs(xpc, sqncs);
-                String xquery = args[0];
-                String server = args[1];
-                int port = Integer.parseInt(args[2]);
-                String user = args[3];
-                String password = args[4];
+                xquery = args[0];
+                server = args[1];
+                port = Integer.parseInt(args[2]);
+                user = args[3];
+                password = args[4];
+                if (args.length == 6) {
+                    database = args[5];
+                }
                 Processor proc = new Processor(xpc.getConfiguration());
+                DatabaseClient session;
                 try {
-                    DatabaseClient session = DatabaseClientFactory.newClient(server, port, new DatabaseClientFactory.DigestAuthContext(user, password));
+                    if (!(database == null)) {
+                        session = DatabaseClientFactory.newClient(server, port, database, new DatabaseClientFactory.DigestAuthContext(user, password));
+                    } else {
+                        session = DatabaseClientFactory.newClient(server, port, new DatabaseClientFactory.DigestAuthContext(user, password));
+                    }
                     ServerEvaluationCall call = session.newServerEval();
                     call.xquery(xquery);
                     EvalResultIterator result = call.eval();
@@ -139,10 +151,11 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                     throw new XPathException(ex);
                 }
             }
+
             private String[] checkArgs(XPathContext xpc, Sequence[] sqncs) throws XPathException {
+                String server = null, port = null, user = null, password = null, database = null;
                 switch (sqncs.length) {
                     case 2:
-                        String server = null, port = null, user = null, password = null;
                         try {
                             TinyElementImpl basexNode = ((TinyElementImpl) sqncs[1].head());
                             AxisIterator iterator = basexNode.iterateAxis(AxisInfo.CHILD);
@@ -161,8 +174,11 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                                         case "password":
                                             password = ni.getStringValue();
                                             break;
+                                        case "database":
+                                            database = ni.getStringValue();
+                                            break;
                                         default:
-                                            throw new XPathException("Children elements of 'marklogic' must be 'server', 'port', 'user' and 'password'.");
+                                            throw new XPathException("Children elements of 'marklogic' must be 'server', 'port', 'user', 'password' and 'database'.");
                                     }
                                 }
                             }
@@ -171,38 +187,46 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                                 server,
                                 port,
                                 user,
-                                password
+                                password,
+                                database
                             };
                         } catch (ClassCastException ex) {
                             throw new XPathException("When using the 2 parameters signature, the second parameter must be of type: element(marklogic).");
                         }
                     case 5:
+                    case 6:
                         try {
+                            if (sqncs.length == 6) {
+                                database = ((StringValue) sqncs[5].head()).getStringValue();
+                            }
                             return new String[]{
                                 ((StringValue) sqncs[0].head()).getStringValue(),
                                 ((StringValue) sqncs[1].head()).getStringValue(),
                                 ((StringValue) sqncs[2].head()).getStringValue(),
                                 ((StringValue) sqncs[3].head()).getStringValue(),
-                                ((StringValue) sqncs[4].head()).getStringValue()
+                                ((StringValue) sqncs[4].head()).getStringValue(),
+                                database
                             };
                         } catch (ClassCastException ex) {
-                            throw new XPathException("When using the 5 parameters signature, all parameters must be of type: xs:string.");
+                            throw new XPathException("When using the 5 or 6 parameters signature, all parameters must be of type: xs:string.");
                         }
                     default:
                         throw new XPathException("Illegal number of arguments. "
-                                + "Arguments are either (xs:string, element(marklogic)), "
-                                + "or (xs:string, xs:string, xs:string, xs:string, xs:string).");
+                                + "Arguments are either ($query as xs:string, $config as element(marklogic)), "
+                                + "($query as xs:string, $server as xs:string, $port as xs:string, $user as xs:string, $password as xs:string), "
+                                + "or ($query as xs:string, $server as xs:string, $port as xs:string, $user as xs:string, $password as xs:string, $database as xs:string).");
                 }
             }
         };
     }
-    
+
     protected class MarkLogicSequenceIterator implements SequenceIterator, AutoCloseable {
+
         private final EvalResultIterator result;
         private final DocumentBuilder builder;
         private final DatabaseClient session;
         private boolean closed = false;
-        
+
         public MarkLogicSequenceIterator(EvalResultIterator result, DocumentBuilder builder, DatabaseClient session) {
             super();
             this.result = result;
@@ -213,7 +237,7 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
         @Override
         public Item next() throws XPathException {
             try {
-                if(result.hasNext()) {
+                if (result.hasNext()) {
                     StreamSource source = new StreamSource(new ByteArrayInputStream(result.next().getString().getBytes("UTF8")));
                     XdmNode node = builder.build(source);
                     return node.getUnderlyingNode();
@@ -221,14 +245,16 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                     close();
                     return null;
                 }
-            } catch(IOException | SaxonApiException ex) {
+            } catch (IOException | SaxonApiException ex) {
                 throw new XPathException(ex);
             }
         }
 
         @Override
         public void close() {
-            if(closed) return;
+            if (closed) {
+                return;
+            }
             try {
                 // Logger.getLogger(MarkLogicQuery.class.getName()).log(Level.INFO, "Closing sequence iterator.");
                 closed = true;
@@ -247,7 +273,7 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
         @Override
         public int getProperties() {
             return 0;
-        }   
+        }
     }
 
 }
