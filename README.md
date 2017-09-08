@@ -30,10 +30,10 @@ mkl-ext:marklogic-query(
 
 You can supply 2 additionnal parameters:
 
-- &lt;database&gt;database name&lt;/database&gt; : alternative database name, if not using the one associated with the HTTP server.
-- &lt;authentication&gt;authentication method&lt;/authentication&gt; : authentication method. Authorized values: "digest", "basic" (default).
+- <tt>&lt;database&gt;database name&lt;/database&gt;</tt> : alternative database name, if not using the one associated with the HTTP server.
+- <tt>&lt;authentication&gt;authentication method&lt;/authentication&gt;</tt> : authentication method. Authorized values: "digest", "basic" (default).
 
-When using the alternative "xs:string+ signature", database and authentication must be supplied as the 6th and 7th arguments respectively.
+When using the alternative "xs:string+ signature", <tt>$database</tt> and <tt>$authentication</tt> must be supplied as the 6th and 7th arguments respectively.
 
 
 Many thanks to Christophe Marchand for the base code!
