@@ -97,6 +97,7 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
             SequenceType.OPTIONAL_STRING,
             SequenceType.OPTIONAL_STRING,
             SequenceType.OPTIONAL_STRING,
+            SequenceType.OPTIONAL_STRING,
             SequenceType.OPTIONAL_STRING};
     }
 
@@ -107,7 +108,7 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
 
     @Override
     public int getMaximumNumberOfArguments() {
-        return 6;
+        return 7;
     }
 
     @Override
@@ -229,7 +230,7 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                                 authentication
                             };
                         } catch (ClassCastException ex) {
-                            throw new XPathException("When using the 5 or 6 parameters signature, all parameters must be of type: xs:string.");
+                            throw new XPathException("When using the 5/6/7 parameters signature, all parameters must be of type: xs:string.");
                         }
                     default:
                         throw new XPathException("Illegal number of arguments. "
