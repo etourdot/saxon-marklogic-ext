@@ -67,14 +67,12 @@ import net.sf.saxon.value.StringValue;
  * mkl-ext:marklogic-query("for $i in 1 to 10 return
  * &lt;test&gt;{$i}&lt;/test&gt;",&lt;marklogic&gt;
  * &lt;server&gt;localhost&lt;/server&gt;&lt;port&gt;8999&lt;/port&gt;
- * &lt;user&gt;user&lt;/user&gt;&lt;password&gt;password&lt;/password&gt;
- * &lt;database&gt;optional-database-name&lt;/database&gt; &lt;/marklogic&gt;
+ * &lt;user&gt;user&lt;/user&gt;&lt;password&gt;password&lt;/password&gt;&lt;/marklogic&gt;
  * );</tt>
  * Or :
  * <tt>declare namespace els-ext = 'fr:askjadev:xml:extfunctions';
  * mkl-ext:marklogic-query("for $i in 1 to 10 return
- * &lt;test&gt;{$i}&lt;/test&gt;", "localhost", "8999", "user", "password",
- * "optional-database-name");</tt>
+ * &lt;test&gt;{$i}&lt;/test&gt;", "localhost", "8999", "user", "password");</tt>
  *
  * Many thanks to Christophe Marchand for the base code!
  *
@@ -122,25 +120,37 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
         return new ExtensionFunctionCall() {
             @Override
             public Sequence call(XPathContext xpc, Sequence[] sqncs) throws XPathException {
-                String xquery = null, server = null, user = null, password = null, database = null;
+                String xquery = null, server = null, user = null, password = null, database = null, authentication = null;
                 Integer port = null;
+                // Get and check args
                 String[] args = checkArgs(xpc, sqncs);
+                // Read args
                 xquery = args[0];
                 server = args[1];
                 port = Integer.parseInt(args[2]);
                 user = args[3];
                 password = args[4];
-                if (args.length == 6) {
-                    database = args[5];
-                }
+                database = args[5];
+                authentication = args[6];
+                // Launch
                 Processor proc = new Processor(xpc.getConfiguration());
                 DatabaseClient session;
                 try {
-                    if (!(database == null)) {
-                        session = DatabaseClientFactory.newClient(server, port, database, new DatabaseClientFactory.DigestAuthContext(user, password));
-                    } else {
-                        session = DatabaseClientFactory.newClient(server, port, new DatabaseClientFactory.DigestAuthContext(user, password));
+                    // Get SecurityContext -> Digest or Basic (default)
+                    DatabaseClientFactory.SecurityContext authContext;
+                    switch (authentication) {
+                        case "digest":
+                            authContext = new DatabaseClientFactory.DigestAuthContext(user, password);
+                        default:
+                            authContext = new DatabaseClientFactory.BasicAuthContext(user, password);
                     }
+                    // Init session
+                    if (!(database == null)) {
+                        session = DatabaseClientFactory.newClient(server, port, database, authContext);
+                    } else {
+                        session = DatabaseClientFactory.newClient(server, port, authContext);
+                    }
+                    // Eval query and get result
                     ServerEvaluationCall call = session.newServerEval();
                     call.xquery(xquery);
                     EvalResultIterator result = call.eval();
@@ -154,6 +164,7 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
 
             private String[] checkArgs(XPathContext xpc, Sequence[] sqncs) throws XPathException {
                 String server = null, port = null, user = null, password = null, database = null;
+                String authentication = "basic";
                 switch (sqncs.length) {
                     case 2:
                         try {
@@ -177,8 +188,11 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                                         case "database":
                                             database = ni.getStringValue();
                                             break;
+                                        case "authentication":
+                                            authentication = ni.getStringValue();
+                                            break;
                                         default:
-                                            throw new XPathException("Children elements of 'marklogic' must be 'server', 'port', 'user', 'password' and 'database'.");
+                                            throw new XPathException("Children elements of 'marklogic' must be 'server', 'port', 'user', 'password', 'database'? and 'authentication'?.");
                                     }
                                 }
                             }
@@ -188,16 +202,22 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                                 port,
                                 user,
                                 password,
-                                database
+                                database,
+                                authentication
                             };
                         } catch (ClassCastException ex) {
                             throw new XPathException("When using the 2 parameters signature, the second parameter must be of type: element(marklogic).");
                         }
                     case 5:
                     case 6:
+                    case 7:
                         try {
                             if (sqncs.length == 6) {
                                 database = ((StringValue) sqncs[5].head()).getStringValue();
+                            }
+                            if (sqncs.length == 7) {
+                                database = ((StringValue) sqncs[5].head()).getStringValue();
+                                authentication = ((StringValue) sqncs[6].head()).getStringValue();
                             }
                             return new String[]{
                                 ((StringValue) sqncs[0].head()).getStringValue(),
@@ -205,7 +225,8 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                                 ((StringValue) sqncs[2].head()).getStringValue(),
                                 ((StringValue) sqncs[3].head()).getStringValue(),
                                 ((StringValue) sqncs[4].head()).getStringValue(),
-                                database
+                                database,
+                                authentication
                             };
                         } catch (ClassCastException ex) {
                             throw new XPathException("When using the 5 or 6 parameters signature, all parameters must be of type: xs:string.");
@@ -214,7 +235,8 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                         throw new XPathException("Illegal number of arguments. "
                                 + "Arguments are either ($query as xs:string, $config as element(marklogic)), "
                                 + "($query as xs:string, $server as xs:string, $port as xs:string, $user as xs:string, $password as xs:string), "
-                                + "or ($query as xs:string, $server as xs:string, $port as xs:string, $user as xs:string, $password as xs:string, $database as xs:string).");
+                                + "($query as xs:string, $server as xs:string, $port as xs:string, $user as xs:string, $password as xs:string, $database as xs:string), "
+                                + "or ($query as xs:string, $server as xs:string, $port as xs:string, $user as xs:string, $password as xs:string, $database as xs:string, $authentication as xs:string).");
                 }
             }
         };
