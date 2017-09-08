@@ -37,3 +37,4 @@ When using the alternative "<tt>xs:string+</tt> signature", <tt>$database</tt> a
 
 
 Many thanks to Christophe Marchand for the base code!
+Go there for a BaseX similar extension function: <a href="https://github.com/cmarchand/xpath-basex-ext">https://github.com/cmarchand/xpath-basex-ext</a>.
