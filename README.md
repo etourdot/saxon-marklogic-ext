@@ -20,7 +20,7 @@ mkl-ext:marklogic-query(
 );</pre>
 
 
-Or the alternative "xs:string+ signature":
+Or the alternative "<tt>xs:string+</tt> signature":
 <pre>declare namespace els-ext = 'fr:askjadev:xml:extfunctions';
 mkl-ext:marklogic-query(
   "for $i in 1 to 10 return&lt;test&gt;{$i}&lt;/test&gt;",
@@ -33,7 +33,7 @@ You can supply 2 additionnal parameters:
 - <tt>&lt;database&gt;database name&lt;/database&gt;</tt> : alternative database name, if not using the one associated with the HTTP server.
 - <tt>&lt;authentication&gt;authentication method&lt;/authentication&gt;</tt> : authentication method. Authorized values: "digest", "basic" (default).
 
-When using the alternative "xs:string+ signature", <tt>$database</tt> and <tt>$authentication</tt> must be supplied as the 6th and 7th arguments respectively.
+When using the alternative "<tt>xs:string+</tt> signature", <tt>$database</tt> and <tt>$authentication</tt> must be supplied as the 6th and 7th arguments respectively.
 
 
 Many thanks to Christophe Marchand for the base code!
