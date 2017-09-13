@@ -29,6 +29,7 @@ import com.marklogic.client.FailedRequestException;
 import com.marklogic.client.ForbiddenUserException;
 import com.marklogic.client.eval.EvalResultIterator;
 import com.marklogic.client.eval.ServerEvaluationCall;
+import com.marklogic.client.io.BytesHandle;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.logging.Level;
@@ -152,10 +153,10 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                         session = DatabaseClientFactory.newClient(server, port, authContext);
                     }
                     // Eval query and get result
+                    DocumentBuilder builder = proc.newDocumentBuilder();
                     ServerEvaluationCall call = session.newServerEval();
                     call.xquery(xquery);
                     EvalResultIterator result = call.eval();
-                    DocumentBuilder builder = proc.newDocumentBuilder();
                     MarkLogicSequenceIterator it = new MarkLogicSequenceIterator(result, builder, session);
                     return new LazySequence(it);
                 } catch (FailedRequestException | ForbiddenUserException ex) {
@@ -261,14 +262,14 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
         public Item next() throws XPathException {
             try {
                 if (result.hasNext()) {
-                    StreamSource source = new StreamSource(new ByteArrayInputStream(result.next().getString().getBytes("UTF8")));
+                    StreamSource source = new StreamSource(new ByteArrayInputStream(result.next().get(new BytesHandle()).toBuffer()));
                     XdmNode node = builder.build(source);
                     return node.getUnderlyingNode();
                 } else {
                     close();
                     return null;
                 }
-            } catch (IOException | SaxonApiException ex) {
+            } catch (SaxonApiException ex) {
                 throw new XPathException(ex);
             }
         }
