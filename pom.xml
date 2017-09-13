@@ -4,7 +4,7 @@
   
   <groupId>fr.askjadev.xml.extfunctions</groupId>
   <artifactId>marklogic</artifactId>
-  <version>1.0.2</version>
+  <version>1.0.3-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>Marklogic extension function</name>
@@ -56,9 +56,15 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
-      <groupId>com.marklogic</groupId>
-      <artifactId>marklogic-client-api</artifactId>
-      <version>4.0.1</version>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpclient</artifactId>
+      <version>4.5.3</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.james</groupId>
+      <artifactId>apache-mime4j-core</artifactId>
+      <version>0.8.1</version>
+      <type>jar</type>
     </dependency>
     <dependency>
       <groupId>junit</groupId>

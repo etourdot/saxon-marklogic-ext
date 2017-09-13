@@ -23,14 +23,15 @@
  */
 package fr.askjadev.xml.extfunctions.marklogic;
 
-import com.marklogic.client.DatabaseClient;
-import com.marklogic.client.DatabaseClientFactory;
-import com.marklogic.client.FailedRequestException;
-import com.marklogic.client.ForbiddenUserException;
-import com.marklogic.client.eval.EvalResultIterator;
-import com.marklogic.client.eval.ServerEvaluationCall;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.xml.transform.stream.StreamSource;
@@ -54,6 +55,35 @@ import net.sf.saxon.tree.tiny.TinyElementImpl;
 import net.sf.saxon.type.Type;
 import net.sf.saxon.value.SequenceType;
 import net.sf.saxon.value.StringValue;
+import org.apache.http.Header;
+import org.apache.http.HttpHost;
+import org.apache.http.NameValuePair;
+import org.apache.http.auth.AuthScheme;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.AuthCache;
+import org.apache.http.client.CredentialsProvider;
+import org.apache.http.client.ResponseHandler;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.protocol.HttpClientContext;
+import org.apache.http.client.utils.URLEncodedUtils;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.entity.mime.MultipartEntity;
+import org.apache.http.impl.auth.BasicScheme;
+import org.apache.http.impl.auth.DigestScheme;
+import org.apache.http.impl.client.BasicAuthCache;
+import org.apache.http.impl.client.BasicCredentialsProvider;
+import org.apache.http.impl.client.BasicResponseHandler;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.message.BasicHeader;
+import org.apache.http.message.BasicNameValuePair;
+import org.apache.james.mime4j.MimeException;
+import org.apache.james.mime4j.parser.AbstractContentHandler;
+import org.apache.james.mime4j.stream.BodyDescriptor;
+import org.apache.james.mime4j.stream.EntityState;
+import org.apache.james.mime4j.stream.MimeTokenStream;
 
 /**
  * This class is an extension function for Saxon. It must be declared by
@@ -133,32 +163,52 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                 password = args[4];
                 database = args[5];
                 authentication = args[6];
-                // Launch
-                Processor proc = new Processor(xpc.getConfiguration());
-                DatabaseClient session;
                 try {
+                    // Using standard HTTP request via MarkLogic Server REST API
+                    CloseableHttpClient httpClient = HttpClients.createDefault();
+                    HttpClientContext context = HttpClientContext.create();
+                    // URL for sending XQueries
+                    URL url = new URL("http", server, port, "/v1/eval");
+                    HttpHost targetHost = new HttpHost(url.getHost(), url.getPort(), url.getProtocol());
+                    // Authentication provider
+                    CredentialsProvider credsProvider = new BasicCredentialsProvider();
+                    credsProvider.setCredentials(new AuthScope(server, port), new UsernamePasswordCredentials(user, password));
                     // Get SecurityContext -> Digest or Basic (default)
-                    DatabaseClientFactory.SecurityContext authContext;
+                    AuthCache authCache = new BasicAuthCache();
+                    AuthScheme authScheme;
                     switch (authentication) {
                         case "digest":
-                            authContext = new DatabaseClientFactory.DigestAuthContext(user, password);
+                            authScheme = new DigestScheme();
                         default:
-                            authContext = new DatabaseClientFactory.BasicAuthContext(user, password);
+                            authScheme = new BasicScheme();
                     }
-                    // Init session
-                    if (!(database == null)) {
-                        session = DatabaseClientFactory.newClient(server, port, database, authContext);
-                    } else {
-                        session = DatabaseClientFactory.newClient(server, port, authContext);
-                    }
-                    // Eval query and get result
-                    ServerEvaluationCall call = session.newServerEval();
-                    call.xquery(xquery);
-                    EvalResultIterator result = call.eval();
+                    authCache.put(targetHost, authScheme);
+                    context.setCredentialsProvider(credsProvider);
+                    context.setAuthCache(authCache);
+                    // Creating the POST query
+                    HttpPost httpQuery = new HttpPost(url.getPath());
+                    // Headers
+                    Header[] headers = new Header[] {
+                        new BasicHeader("Content-type","application/x-www-form-urlencoded"),
+                        new BasicHeader("Accept","multipart/mixed")
+                    };
+                    httpQuery.setHeaders(headers);
+                    // Deal with the query body
+                    List<NameValuePair> nameValuePairs = new ArrayList<>();
+                    nameValuePairs.add(new BasicNameValuePair("xquery", xquery));
+                    String body = URLEncodedUtils.format(nameValuePairs, Charset.forName("UTF-8"));
+                    httpQuery.setEntity(new StringEntity(body, Charset.forName("UTF-8")));
+                    // Execute the query and get the result
+                    CloseableHttpResponse httpResponse = httpClient.execute(httpQuery, context);
+                    String multipartResponse = new BasicResponseHandler().handleResponse(httpResponse);
+                    List <String> responses = getMultipartResponseBodies(multipartResponse);
+                    // Get result through Saxon API
+                    Processor proc = new Processor(xpc.getConfiguration());
                     DocumentBuilder builder = proc.newDocumentBuilder();
-                    MarkLogicSequenceIterator it = new MarkLogicSequenceIterator(result, builder, session);
+                    MarkLogicSequenceIterator it = new MarkLogicSequenceIterator(httpResponse, httpClient, builder);
                     return new LazySequence(it);
-                } catch (FailedRequestException | ForbiddenUserException ex) {
+                }
+                catch (IOException ex) {
                     throw new XPathException(ex);
                 }
             }
@@ -240,21 +290,37 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                                 + "or ($query as xs:string, $server as xs:string, $port as xs:string, $user as xs:string, $password as xs:string, $database as xs:string, $authentication as xs:string).");
                 }
             }
+            
+            private List<String> getMultipartResponseBodies(String response) throws IOException, MimeException {
+                List<String> bodyParts = null;
+                MimeTokenStream stream = new MimeTokenStream();
+                try (InputStream instream = new ByteArrayInputStream(response.getBytes(Charset.forName("UTF-8")))) {
+                    stream.parse(instream);
+                    for (EntityState state = stream.getState(); state != EntityState.T_END_OF_STREAM; state = stream.next()) {
+                        if (state == EntityState.T_BODY) {
+                            bodyParts.add(stream.getBodyDescriptor().toString());
+                        }
+                    }
+                    instream.close();
+                    return bodyParts;
+                }
+            }
+            
         };
     }
 
     protected class MarkLogicSequenceIterator implements SequenceIterator, AutoCloseable {
 
-        private final EvalResultIterator result;
+        private final CloseableHttpResponse response;
+        private final CloseableHttpClient client;
         private final DocumentBuilder builder;
-        private final DatabaseClient session;
         private boolean closed = false;
 
-        public MarkLogicSequenceIterator(EvalResultIterator result, DocumentBuilder builder, DatabaseClient session) {
+        public MarkLogicSequenceIterator(CloseableHttpResponse response, CloseableHttpClient client, DocumentBuilder builder) {
             super();
-            this.result = result;
+            this.response = response;
+            this.client = client;
             this.builder = builder;
-            this.session = session;
         }
 
         @Override
@@ -281,8 +347,8 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
             try {
                 // Logger.getLogger(MarkLogicQuery.class.getName()).log(Level.INFO, "Closing sequence iterator.");
                 closed = true;
-                result.close();
-                session.release();
+                response.close();
+                client.close();
             } catch (Exception ex) {
                 Logger.getLogger(MarkLogicQuery.class.getName()).log(Level.SEVERE, null, ex);
             }
