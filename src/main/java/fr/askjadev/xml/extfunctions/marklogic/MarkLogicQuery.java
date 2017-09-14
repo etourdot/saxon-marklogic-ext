@@ -26,11 +26,10 @@ package fr.askjadev.xml.extfunctions.marklogic;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -63,13 +62,11 @@ import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.AuthCache;
 import org.apache.http.client.CredentialsProvider;
-import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.http.entity.StringEntity;
-import org.apache.http.entity.mime.MultipartEntity;
 import org.apache.http.impl.auth.BasicScheme;
 import org.apache.http.impl.auth.DigestScheme;
 import org.apache.http.impl.client.BasicAuthCache;
@@ -80,8 +77,6 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicHeader;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.james.mime4j.MimeException;
-import org.apache.james.mime4j.parser.AbstractContentHandler;
-import org.apache.james.mime4j.stream.BodyDescriptor;
 import org.apache.james.mime4j.stream.EntityState;
 import org.apache.james.mime4j.stream.MimeTokenStream;
 
@@ -201,11 +196,11 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                     // Execute the query and get the result
                     CloseableHttpResponse httpResponse = httpClient.execute(httpQuery, context);
                     String multipartResponse = new BasicResponseHandler().handleResponse(httpResponse);
-                    List <String> responses = getMultipartResponseBodies(multipartResponse);
+                    Iterator<String> responses = getMultipartResponseBodies(multipartResponse);
                     // Get result through Saxon API
                     Processor proc = new Processor(xpc.getConfiguration());
                     DocumentBuilder builder = proc.newDocumentBuilder();
-                    MarkLogicSequenceIterator it = new MarkLogicSequenceIterator(httpResponse, httpClient, builder);
+                    MarkLogicSequenceIterator it = new MarkLogicSequenceIterator(httpResponse, responses, httpClient, builder);
                     return new LazySequence(it);
                 }
                 catch (IOException ex) {
@@ -291,10 +286,10 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                 }
             }
             
-            private List<String> getMultipartResponseBodies(String response) throws IOException, MimeException {
-                List<String> bodyParts = null;
+            private Iterator<String> getMultipartResponseBodies(String response) throws IOException, MimeException {
+                List<String> bodyParts;
                 MimeTokenStream stream = new MimeTokenStream();
-                try (InputStream instream = new ByteArrayInputStream(response.getBytes(Charset.forName("UTF-8")))) {
+                try (InputStream instream = new ByteArrayInputStream(response.getBytes("UTF-8"))) {
                     stream.parse(instream);
                     for (EntityState state = stream.getState(); state != EntityState.T_END_OF_STREAM; state = stream.next()) {
                         if (state == EntityState.T_BODY) {
@@ -302,7 +297,7 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                         }
                     }
                     instream.close();
-                    return bodyParts;
+                    return bodyParts.iterator();
                 }
             }
             
@@ -311,23 +306,25 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
 
     protected class MarkLogicSequenceIterator implements SequenceIterator, AutoCloseable {
 
-        private final CloseableHttpResponse response;
-        private final CloseableHttpClient client;
+        private final CloseableHttpResponse httpResponse;
+        private final Iterator<String> responseBody;
+        private final CloseableHttpClient httpClient;
         private final DocumentBuilder builder;
         private boolean closed = false;
 
-        public MarkLogicSequenceIterator(CloseableHttpResponse response, CloseableHttpClient client, DocumentBuilder builder) {
+        public MarkLogicSequenceIterator(CloseableHttpResponse httpResponse, Iterator<String> responseBody, CloseableHttpClient httpClient, DocumentBuilder builder) {
             super();
-            this.response = response;
-            this.client = client;
+            this.httpResponse = httpResponse;
+            this.responseBody = responseBody;
+            this.httpClient = httpClient;
             this.builder = builder;
         }
 
         @Override
         public Item next() throws XPathException {
             try {
-                if (result.hasNext()) {
-                    StreamSource source = new StreamSource(new ByteArrayInputStream(result.next().getString().getBytes("UTF8")));
+                if (responseBody.hasNext()) {
+                    StreamSource source = new StreamSource(new ByteArrayInputStream(responseBody.next().getBytes("UTF8")));
                     XdmNode node = builder.build(source);
                     return node.getUnderlyingNode();
                 } else {
@@ -347,8 +344,8 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
             try {
                 // Logger.getLogger(MarkLogicQuery.class.getName()).log(Level.INFO, "Closing sequence iterator.");
                 closed = true;
-                response.close();
-                client.close();
+                httpResponse.close();
+                httpClient.close();
             } catch (Exception ex) {
                 Logger.getLogger(MarkLogicQuery.class.getName()).log(Level.SEVERE, null, ex);
             }
