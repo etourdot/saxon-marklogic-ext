@@ -1,5 +1,6 @@
 # saxon-marklogic-ext
 
+
 This is an extension function for Saxon allowing XQueries to be sent to MarkLogic Server.
 
 
@@ -36,6 +37,22 @@ You can supply 2 additionnal parameters:
 When using the alternative "<tt>xs:string+</tt> signature", <tt>$database</tt> and <tt>$authentication</tt> must be supplied as the 6th and 7th arguments respectively.
 
 
+/!\ The query must return a valid XML document (or a sequence of XML documents). If you need to return an atomic value, wrap it in a dummy XML element.
+
+
 Many thanks to Christophe Marchand for the base code!
 
 Go there for a BaseX similar extension function: <a href="https://github.com/cmarchand/xpath-basex-ext">https://github.com/cmarchand/xpath-basex-ext</a>.
+
+
+## Current version: 1.0.3
+
+Maven support:
+
+<pre>
+&lt;dependency&gt;
+  &lt;groupId&gt;fr.askjadev.xml.extfunctions&lt;/groupId&gt;
+  &lt;artifactId&gt;marklogic&lt;/artifactId&gt;
+  &lt;version&gt;1.0.3&lt;/version&gt;
+&lt;/dependency&gt;
+</pre>
