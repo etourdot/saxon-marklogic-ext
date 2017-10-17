@@ -68,4 +68,25 @@ $ cd saxon-marklogic-ext
 $ mvn clean package -DskipTests=true
 </pre>
 
-Please note that you need to deactivate the tests to be able to build the project using the parameter `-DskipTests=true`, unless you have correctly configured your MarkLogic Server environment.
+Please note that you need to deactivate the tests using the parameter `-DskipTests=true` to be able to build the project, unless you have correctly configured your MarkLogic Server environment.
+
+
+## Testing
+
+The tests require a running MarkLogic Server instance. By default, they are run under the following MarkLogic Server configuration:
+
+* MarkLogic Server runs on `localhost`.
+* There is a `Documents` database associated with a HTTP Server on port `8000`.
+* Username/password are `admin`/`admin`.
+* The HTTP Server authentication scheme is `basic`.
+
+If you wish to change this behaviour, you can add additional parameters to the test command-line which values will be used instead of the default ones.
+
+|Parameter|Default|Usage|Description|
+|---|---|---|---|
+|testServer|localhost|`-DtestServer=10.11.12.90`|The server on which to run the tests.|
+|testPort|8000|`-DtestPort=8999`|The port to use to talk to the HTTP Server.|
+|testUser|admin|`-DtestUser=myUser`|An authorised user.|
+|testPassword|admin|`-DtestPassword=myPassword`|The user password.|
+|testDatabase|Documents|`-DtestDatabase=myDb`|The HTTP Server default database name.|
+|testAuthentication|basic|`-DtestAuthentication=digest`|The HTTP Server authentication scheme (`basic` or `digest`).|
