@@ -56,3 +56,16 @@ Maven support:
   &lt;version&gt;1.0.3&lt;/version&gt;
 &lt;/dependency&gt;
 </pre>
+
+
+## Build
+
+To build the project from the sources, follow these steps:
+
+<pre>
+$ git clone https://github.com/AxelCourt/saxon-marklogic-ext.git
+$ cd saxon-marklogic-ext
+$ mvn clean package -DskipTests=true
+</pre>
+
+Please note that you need to deactivate the tests to be able to build the project using the parameter `-DskipTests=true`, unless you have correctly configured your MarkLogic Server environment.
