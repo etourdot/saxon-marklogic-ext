@@ -89,4 +89,4 @@ If you wish to change this behaviour, you can add additional parameters to the t
 |testUser|admin|`-DtestUser=myUser`|An authorised user.|
 |testPassword|admin|`-DtestPassword=myPassword`|The user password.|
 |testDatabase|Documents|`-DtestDatabase=myDb`|The HTTP Server default database name.|
-|testAuthentication|basic|`-DtestAuthentication=digest`|The HTTP Server authentication scheme (`basic` or `digest`).|
+|testAuthentication|basic|`-DtestAuthentication=digest`|The HTTP Server authentication scheme. Authorized values: `basic` or `digest`.|
