@@ -82,7 +82,7 @@ The tests require a running MarkLogic Server instance. By default, they are run 
 
 If you wish to change this behaviour, you can add additional parameters to the test command-line which values will be used instead of the default ones.
 
-|Parameter|Default|Usage|Description|
+|Parameter|Default values|Usage|Description|
 |---|---|---|---|
 |testServer|localhost|`-DtestServer=10.11.12.90`|The server on which to run the tests.|
 |testPort|8000|`-DtestPort=8999`|The port to use to talk to the HTTP Server.|
