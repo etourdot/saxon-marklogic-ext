@@ -142,6 +142,7 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                     switch (authentication) {
                         case "digest":
                             authContext = new DatabaseClientFactory.DigestAuthContext(user, password);
+                            break;
                         default:
                             authContext = new DatabaseClientFactory.BasicAuthContext(user, password);
                     }
