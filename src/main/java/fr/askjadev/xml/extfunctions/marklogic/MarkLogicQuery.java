@@ -29,31 +29,23 @@ import com.marklogic.client.FailedRequestException;
 import com.marklogic.client.ForbiddenUserException;
 import com.marklogic.client.eval.EvalResultIterator;
 import com.marklogic.client.eval.ServerEvaluationCall;
-import com.marklogic.client.io.BytesHandle;
-import java.io.ByteArrayInputStream;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import javax.xml.transform.stream.StreamSource;
+import fr.askjadev.xml.extfunctions.marklogic.util.ConfigValue;
+import java.util.HashMap;
+import java.util.Iterator;
 import net.sf.saxon.expr.XPathContext;
 import net.sf.saxon.lib.ExtensionFunctionCall;
 import net.sf.saxon.lib.ExtensionFunctionDefinition;
-import net.sf.saxon.om.AxisInfo;
-import net.sf.saxon.om.Item;
+import net.sf.saxon.ma.map.HashTrieMap;
+import net.sf.saxon.ma.map.KeyValuePair;
 import net.sf.saxon.om.LazySequence;
-import net.sf.saxon.om.NodeInfo;
 import net.sf.saxon.om.Sequence;
-import net.sf.saxon.om.SequenceIterator;
 import net.sf.saxon.om.StructuredQName;
 import net.sf.saxon.s9api.DocumentBuilder;
 import net.sf.saxon.s9api.Processor;
-import net.sf.saxon.s9api.SaxonApiException;
-import net.sf.saxon.s9api.XdmNode;
 import net.sf.saxon.trans.XPathException;
-import net.sf.saxon.tree.iter.AxisIterator;
-import net.sf.saxon.tree.tiny.TinyElementImpl;
-import net.sf.saxon.type.Type;
 import net.sf.saxon.value.SequenceType;
-import net.sf.saxon.value.StringValue;
+import net.sf.saxon.ma.map.MapType;
+import net.sf.saxon.value.BooleanValue;
 
 /**
  * This class is an extension function for Saxon. It must be declared by
@@ -91,14 +83,11 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
 
     @Override
     public SequenceType[] getArgumentTypes() {
-        return new SequenceType[]{
-            SequenceType.SINGLE_STRING,
-            SequenceType.SINGLE_ITEM,
-            SequenceType.OPTIONAL_STRING,
-            SequenceType.OPTIONAL_STRING,
-            SequenceType.OPTIONAL_STRING,
-            SequenceType.OPTIONAL_STRING,
-            SequenceType.OPTIONAL_STRING};
+        return new SequenceType[] {
+            SequenceType.SINGLE_ATOMIC,
+            MapType.OPTIONAL_MAP_ITEM,
+            MapType.OPTIONAL_MAP_ITEM
+        };
     }
 
     @Override
@@ -108,7 +97,7 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
 
     @Override
     public int getMaximumNumberOfArguments() {
-        return 7;
+        return 3;
     }
 
     @Override
@@ -118,44 +107,42 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
 
     @Override
     public ExtensionFunctionCall makeCallExpression() {
+        
         return new ExtensionFunctionCall() {
+            
             @Override
             public Sequence call(XPathContext xpc, Sequence[] sqncs) throws XPathException {
-                String xquery = null, server = null, user = null, password = null, database = null, authentication = null;
-                Integer port = null;
-                // Get and check args
-                String[] args = checkArgs(xpc, sqncs);
-                // Read args
-                xquery = args[0];
-                server = args[1];
-                port = Integer.parseInt(args[2]);
-                user = args[3];
-                password = args[4];
-                database = args[5];
-                authentication = args[6];
+                // Check and get the configuration
+                HashMap<String,ConfigValue> config = getConfig(xpc, sqncs);
                 // Launch
                 Processor proc = new Processor(xpc.getConfiguration());
                 DatabaseClient session;
                 try {
                     // Get SecurityContext -> Digest or Basic (default)
                     DatabaseClientFactory.SecurityContext authContext;
-                    switch (authentication) {
+                    switch (config.get("authentication").strVal()) {
                         case "digest":
-                            authContext = new DatabaseClientFactory.DigestAuthContext(user, password);
+                            authContext = new DatabaseClientFactory.DigestAuthContext(config.get("user").strVal(), config.get("password").strVal());
                             break;
                         default:
-                            authContext = new DatabaseClientFactory.BasicAuthContext(user, password);
+                            authContext = new DatabaseClientFactory.BasicAuthContext(config.get("user").strVal(), config.get("password").strVal());
                     }
                     // Init session
-                    if (!(database == null)) {
-                        session = DatabaseClientFactory.newClient(server, port, database, authContext);
+                    if (!(config.get("database") == null)) {
+                        session = DatabaseClientFactory.newClient(config.get("server").strVal(), config.get("port").intVal(), config.get("database").strVal(), authContext);
                     } else {
-                        session = DatabaseClientFactory.newClient(server, port, authContext);
+                        session = DatabaseClientFactory.newClient(config.get("server").strVal(), config.get("port").intVal(), authContext);
                     }
+                    //Get the XQuery (URI or String query)
+                    
+
                     // Eval query and get result
                     DocumentBuilder builder = proc.newDocumentBuilder();
                     ServerEvaluationCall call = session.newServerEval();
-                    call.xquery(xquery);
+                    
+                    // TO 
+                    
+                    //call.xquery(xquery);
                     EvalResultIterator result = call.eval();
                     MarkLogicSequenceIterator it = new MarkLogicSequenceIterator(result, builder, session);
                     return new LazySequence(it);
@@ -164,145 +151,146 @@ public class MarkLogicQuery extends ExtensionFunctionDefinition {
                 }
             }
 
-            private String[] checkArgs(XPathContext xpc, Sequence[] sqncs) throws XPathException {
-                String server = null, port = null, user = null, password = null, database = null;
-                String authentication = "basic";
-                switch (sqncs.length) {
-                    case 2:
-                        try {
-                            TinyElementImpl basexNode = ((TinyElementImpl) sqncs[1].head());
-                            AxisIterator iterator = basexNode.iterateAxis(AxisInfo.CHILD);
-                            for (NodeInfo ni = iterator.next(); ni != null; ni = iterator.next()) {
-                                if (ni.getNodeKind() == Type.ELEMENT) {
-                                    switch (ni.getLocalPart()) {
-                                        case "server":
-                                            server = ni.getStringValue();
-                                            break;
-                                        case "port":
-                                            port = ni.getStringValue();
-                                            break;
-                                        case "user":
-                                            user = ni.getStringValue();
-                                            break;
-                                        case "password":
-                                            password = ni.getStringValue();
-                                            break;
-                                        case "database":
-                                            database = ni.getStringValue();
-                                            break;
-                                        case "authentication":
-                                            authentication = ni.getStringValue();
-                                            break;
-                                        default:
-                                            throw new XPathException("Children elements of 'marklogic' must be 'server', 'port', 'user', 'password', 'database'? and 'authentication'?.");
-                                    }
-                                }
-                            }
-                            return new String[]{
-                                ((StringValue) sqncs[0].head()).getStringValue(),
-                                server,
-                                port,
-                                user,
-                                password,
-                                database,
-                                authentication
-                            };
-                        } catch (ClassCastException ex) {
-                            throw new XPathException("When using the 2 parameters signature, the second parameter must be of type: element(marklogic).");
+            private HashMap<String,ConfigValue> getConfig(XPathContext xpc, Sequence[] sqncs) throws XPathException {
+                HashMap<String,ConfigValue> config = initBlankConfig();
+                try {
+                    HashTrieMap configMap = (HashTrieMap) sqncs[2].head();
+                    Iterator<KeyValuePair> iterator = configMap.iterator();
+                    for (KeyValuePair kv = iterator.next(); kv != null; kv = iterator.next()) {
+                        String k = kv.key.getStringValue();
+                        switch (k) {
+                            case "server":
+                            case "user":
+                            case "password":
+                            case "database":
+                            case "authentication":
+                                ConfigValue<String> strval = new ConfigValue<>();
+                                strval.set(kv.value.head().getStringValue());
+                                config.put(k, strval);
+                                break;
+                            case "port":
+                                ConfigValue<Integer> intval = new ConfigValue<>();
+                                intval.set(Integer.parseInt(kv.value.head().getStringValue()));
+                                config.put(k, intval);
+                                break;
+                            case "isXQueryOnServer":
+                                ConfigValue<Boolean> boolval = new ConfigValue<>();
+                                boolval.set(((BooleanValue) kv.value.head()).getBooleanValue());
+                                config.put(k, boolval);
+                                break;
+                            default:
+                                throw new XPathException("Configuration entries must be 'server', 'port', 'user', 'password', 'database'?, 'authentication'? and 'isXQueryOnServer'?.");
                         }
-                    case 5:
-                    case 6:
-                    case 7:
-                        try {
-                            if (sqncs.length == 6) {
-                                database = ((StringValue) sqncs[5].head()).getStringValue();
-                            }
-                            if (sqncs.length == 7) {
-                                database = ((StringValue) sqncs[5].head()).getStringValue();
-                                authentication = ((StringValue) sqncs[6].head()).getStringValue();
-                            }
-                            return new String[]{
-                                ((StringValue) sqncs[0].head()).getStringValue(),
-                                ((StringValue) sqncs[1].head()).getStringValue(),
-                                ((StringValue) sqncs[2].head()).getStringValue(),
-                                ((StringValue) sqncs[3].head()).getStringValue(),
-                                ((StringValue) sqncs[4].head()).getStringValue(),
-                                database,
-                                authentication
-                            };
-                        } catch (ClassCastException ex) {
-                            throw new XPathException("When using the 5/6/7 parameters signature, all parameters must be of type: xs:string.");
-                        }
-                    default:
-                        throw new XPathException("Illegal number of arguments. "
-                                + "Arguments are either ($query as xs:string, $config as element(marklogic)), "
-                                + "($query as xs:string, $server as xs:string, $port as xs:string, $user as xs:string, $password as xs:string), "
-                                + "($query as xs:string, $server as xs:string, $port as xs:string, $user as xs:string, $password as xs:string, $database as xs:string), "
-                                + "or ($query as xs:string, $server as xs:string, $port as xs:string, $user as xs:string, $password as xs:string, $database as xs:string, $authentication as xs:string).");
+                    }
+                    if (config.get("server") == null ||
+                        config.get("user") == null ||
+                        config.get("password") == null ||
+                        config.get("port") == null) {
+                        throw new XPathException("Some mandatory configuration values are missing. 'server', 'port', 'user' and 'password' must be specified.");
+                    }
+                    return config;
+                }
+                catch (ClassCastException ex) {
+                    throw new XPathException("The 2nd argument must be an XPath 3.0 map defining the server and query configuration.");
                 }
             }
+                
+            private HashMap<String,ConfigValue> initBlankConfig() {
+                HashMap<String,ConfigValue> blankConfig = new HashMap<>();
+                blankConfig.put("server", null);
+                blankConfig.put("user", null);
+                blankConfig.put("password", null);
+                blankConfig.put("database", null);
+                blankConfig.put("port", null);
+                ConfigValue<String> authentication = new ConfigValue<>();
+                authentication.set("basic");
+                blankConfig.put("authentication", authentication);
+                ConfigValue<Boolean> isXQueryOnServer = new ConfigValue<>();
+                isXQueryOnServer.set(false);
+                blankConfig.put("isXQueryOnServer", isXQueryOnServer);
+                return blankConfig;
+            }
+                
+                
+                
+                
+//                switch (sqncs.length) {
+//                    case 2:
+//                        try {
+//                            TinyElementImpl basexNode = ((TinyElementImpl) sqncs[1].head());
+//                            AxisIterator iterator = basexNode.iterateAxis(AxisInfo.CHILD);
+//                            for (NodeInfo ni = iterator.next(); ni != null; ni = iterator.next()) {
+//                                if (ni.getNodeKind() == Type.ELEMENT) {
+//                                    switch (ni.getLocalPart()) {
+//                                        case "server":
+//                                            server = ni.getStringValue();
+//                                            break;
+//                                        case "port":
+//                                            port = ni.getStringValue();
+//                                            break;
+//                                        case "user":
+//                                            user = ni.getStringValue();
+//                                            break;
+//                                        case "password":
+//                                            password = ni.getStringValue();
+//                                            break;
+//                                        case "database":
+//                                            database = ni.getStringValue();
+//                                            break;
+//                                        case "authentication":
+//                                            authentication = ni.getStringValue();
+//                                            break;
+//                                        default:
+//                                            throw new XPathException("Children elements of 'marklogic' must be 'server', 'port', 'user', 'password', 'database'? and 'authentication'?.");
+//                                    }
+//                                }
+//                            }
+//                            return new String[]{
+//                                ((StringValue) sqncs[0].head()).getStringValue(),
+//                                server,
+//                                port,
+//                                user,
+//                                password,
+//                                database,
+//                                authentication
+//                            };
+//                        } catch (ClassCastException ex) {
+//                            throw new XPathException("When using the 2 parameters signature, the second parameter must be of type: element(marklogic).");
+//                        }
+//                    case 5:
+//                    case 6:
+//                    case 7:
+//                        try {
+//                            if (sqncs.length == 6) {
+//                                database = ((StringValue) sqncs[5].head()).getStringValue();
+//                            }
+//                            if (sqncs.length == 7) {
+//                                database = ((StringValue) sqncs[5].head()).getStringValue();
+//                                authentication = ((StringValue) sqncs[6].head()).getStringValue();
+//                            }
+//                            return new String[]{
+//                                ((StringValue) sqncs[0].head()).getStringValue(),
+//                                ((StringValue) sqncs[1].head()).getStringValue(),
+//                                ((StringValue) sqncs[2].head()).getStringValue(),
+//                                ((StringValue) sqncs[3].head()).getStringValue(),
+//                                ((StringValue) sqncs[4].head()).getStringValue(),
+//                                database,
+//                                authentication
+//                            };
+//                        } catch (ClassCastException ex) {
+//                            throw new XPathException("When using the 5/6/7 parameters signature, all parameters must be of type: xs:string.");
+//                        }
+//                    default:
+//                        throw new XPathException("Illegal number of arguments. "
+//                                + "Arguments are either ($query as xs:string, $config as element(marklogic)), "
+//                                + "($query as xs:string, $server as xs:string, $port as xs:string, $user as xs:string, $password as xs:string), "
+//                                + "($query as xs:string, $server as xs:string, $port as xs:string, $user as xs:string, $password as xs:string, $database as xs:string), "
+//                                + "or ($query as xs:string, $server as xs:string, $port as xs:string, $user as xs:string, $password as xs:string, $database as xs:string, $authentication as xs:string).");
+//                }
+//            }
+            
         };
-    }
-
-    protected class MarkLogicSequenceIterator implements SequenceIterator, AutoCloseable {
-
-        private final EvalResultIterator result;
-        private final DocumentBuilder builder;
-        private final DatabaseClient session;
-        private Integer resultCount;
-        private boolean closed = false;
-
-        public MarkLogicSequenceIterator(EvalResultIterator result, DocumentBuilder builder, DatabaseClient session) {
-            super();
-            this.result = result;
-            this.builder = builder;
-            this.session = session;
-            this.resultCount = 0;
-        }
-
-        @Override
-        public Item next() throws XPathException {
-            try {
-                if (result.hasNext()) {
-                    resultCount++;
-                    StreamSource source = new StreamSource(new ByteArrayInputStream(result.next().get(new BytesHandle()).toBuffer()));
-                    XdmNode node = builder.build(source);
-                    // Logger.getLogger(MarkLogicQuery.class.getName()).log(Level.INFO, node.toString());
-                    return node.getUnderlyingNode();
-                } else {
-                    close();
-                    return null;
-                }
-            } catch (SaxonApiException ex) {
-                throw new XPathException(ex);
-            }
-        }
-
-        @Override
-        public void close() {
-            // Logger.getLogger(MarkLogicQuery.class.getName()).log(Level.INFO, "Total result(s): {0}", resultCount);
-            if (closed) {
-                return;
-            }
-            try {
-                // Logger.getLogger(MarkLogicQuery.class.getName()).log(Level.INFO, "Closing sequence iterator.");
-                closed = true;
-                result.close();
-                session.release();
-            } catch (Exception ex) {
-                Logger.getLogger(MarkLogicQuery.class.getName()).log(Level.SEVERE, null, ex);
-            }
-        }
-
-        @Override
-        public SequenceIterator getAnother() throws XPathException {
-            return null;
-        }
-
-        @Override
-        public int getProperties() {
-            return 0;
-        }
+    
     }
 
 }
