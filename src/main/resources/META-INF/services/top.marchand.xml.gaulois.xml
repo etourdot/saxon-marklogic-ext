@@ -3,6 +3,7 @@
   <saxon>
     <extensions>
       <function>fr.askjadev.xml.extfunctions.marklogic.MarkLogicQuery</function>
+      <function>fr.askjadev.xml.extfunctions.marklogic.MarkLogicQueryInvoke</function>
     </extensions>
   </saxon>
 </gaulois-services>

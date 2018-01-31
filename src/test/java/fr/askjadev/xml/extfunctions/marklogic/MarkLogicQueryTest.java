@@ -63,7 +63,7 @@ public class MarkLogicQueryTest {
         super();
         this.CONNECT = new ArrayList();
         this.CONNECT.add(System.getProperty("testServer") == null ? "localhost" : System.getProperty("testServer"));
-        this.CONNECT.add(System.getProperty("testPort") == null ? "8000" : System.getProperty("testPort"));
+        this.CONNECT.add(System.getProperty("testPort") == null ? "8004" : System.getProperty("testPort"));
         this.CONNECT.add(System.getProperty("testUser") == null ? "admin" : System.getProperty("testUser"));
         this.CONNECT.add(System.getProperty("testPassword") == null ? "admin" : System.getProperty("testPassword"));
         this.CONNECT.add(System.getProperty("testDatabase") == null ? "Documents" : System.getProperty("testDatabase"));
